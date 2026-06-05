@@ -27,6 +27,19 @@ export default function Matches() {
 
   useEffect(() => { fetchData() }, [fetchData])
 
+  // Auto-lock: set a timer for the next kickoff, re-fetch when it fires
+  useEffect(() => {
+    if (matches.length === 0) return
+    const now = Date.now()
+    const next = matches
+      .map(m => new Date(m.kickoff_at).getTime())
+      .filter(t => t > now)
+      .sort((a, b) => a - b)[0]
+    if (!next) return
+    const timer = setTimeout(fetchData, next - now)
+    return () => clearTimeout(timer)
+  }, [matches, fetchData])
+
   const now = new Date()
   const upcoming = matches.filter(m => new Date(m.kickoff_at) > now)
   const past = matches.filter(m => new Date(m.kickoff_at) <= now)
