@@ -4,6 +4,7 @@ import Login from './pages/Login'
 import Matches from './pages/Matches'
 import Leaderboard from './pages/Leaderboard'
 import Admin from './pages/Admin'
+import Profile from './pages/Profile'
 import Navbar from './components/Navbar'
 
 function ProtectedRoute({ children }) {
@@ -30,6 +31,7 @@ export default function App() {
           <Route path="/matches" element={<ProtectedRoute><Matches /></ProtectedRoute>} />
           <Route path="/leaderboard" element={<ProtectedRoute><Leaderboard /></ProtectedRoute>} />
           <Route path="/admin" element={<AdminRoute><Admin /></AdminRoute>} />
+          <Route path="/profile" element={<ProtectedRoute><Profile /></ProtectedRoute>} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </main>

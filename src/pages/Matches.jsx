@@ -32,9 +32,13 @@ export default function Matches() {
   const past = matches.filter(m => new Date(m.kickoff_at) <= now)
   const shown = tab === 'upcoming' ? upcoming : past
 
+  const toPktDate = (kickoffAt) =>
+    new Date(kickoffAt).toLocaleDateString('en-CA', { timeZone: 'Asia/Karachi' })
+
   const grouped = shown.reduce((acc, m) => {
-    if (!acc[m.match_date]) acc[m.match_date] = []
-    acc[m.match_date].push(m)
+    const key = toPktDate(m.kickoff_at)
+    if (!acc[key]) acc[key] = []
+    acc[key].push(m)
     return acc
   }, {})
 
@@ -67,7 +71,7 @@ export default function Matches() {
         {Object.keys(grouped).length === 0 ? (
           <div className="empty-state">No matches to show</div>
         ) : (
-          Object.entries(grouped).map(([date, dayMatches]) => (
+          Object.entries(grouped).sort(([a], [b]) => a.localeCompare(b)).map(([date, dayMatches]) => (
             <div key={date} className="day-group">
               <div className="day-label">{formatDate(date)}</div>
               {dayMatches.map(match => (

@@ -43,8 +43,9 @@ export default function MatchCard({ match, prediction, onSaved, playerId }) {
         <span className="match-time-label">
           {new Date(match.kickoff_at).toLocaleString('en-US', {
             month: 'short', day: 'numeric',
-            hour: '2-digit', minute: '2-digit'
-          })}
+            hour: '2-digit', minute: '2-digit',
+            timeZone: 'Asia/Karachi'
+          })} PKT
         </span>
       </div>
 

@@ -895,3 +895,67 @@ option {
 
 .btn-login:hover:not(:disabled) { background: var(--primary-dk); }
 .btn-login:disabled { opacity: 0.4; cursor: not-allowed; }
+
+/* ==========================================
+   PROFILE
+   ========================================== */
+.profile-wrap {
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.pin-form {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--r);
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.pin-form h3 {
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.pin-form input[type="password"] {
+  width: 100%;
+  padding: 11px 14px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+  color: var(--text);
+  font-size: 20px;
+  letter-spacing: 0.12em;
+  outline: none;
+}
+
+.pin-form input[type="password"]:focus { border-color: var(--primary); }
+
+.success-msg {
+  font-size: 13px;
+  color: var(--green);
+  text-align: center;
+  padding: 8px 12px;
+  background: rgba(16,185,129,0.1);
+  border-radius: var(--r-sm);
+  border: 1px solid rgba(16,185,129,0.2);
+}
+
+.btn-logout {
+  width: 100%;
+  padding: 12px;
+  background: transparent;
+  color: var(--red);
+  border: 1px solid rgba(239,68,68,0.3);
+  border-radius: var(--r-sm);
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.btn-logout:hover { background: rgba(239,68,68,0.08); }

@@ -1,14 +1,8 @@
-import { NavLink, useNavigate } from 'react-router-dom'
+import { NavLink } from 'react-router-dom'
 import { usePlayer } from '../context/PlayerContext'
 
 export default function Navbar() {
-  const { player, logout } = usePlayer()
-  const navigate = useNavigate()
-
-  const handleLogout = () => {
-    logout()
-    navigate('/')
-  }
+  const { player } = usePlayer()
 
   return (
     <nav className="navbar">
@@ -26,10 +20,10 @@ export default function Navbar() {
           <span className="nav-label">Admin</span>
         </NavLink>
       )}
-      <button onClick={handleLogout} className="nav-item nav-btn">
+      <NavLink to="/profile" className={({ isActive }) => `nav-item${isActive ? ' active' : ''}`}>
         <span className="nav-icon">👤</span>
         <span className="nav-label">{player?.name?.split(' ')[0]}</span>
-      </button>
+      </NavLink>
     </nav>
   )
 }
