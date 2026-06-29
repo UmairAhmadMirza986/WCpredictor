@@ -166,7 +166,6 @@ export default function MatchCard({ match, prediction, onSaved, playerId }) {
       </div>}
 
       {match.stage !== 'group' && !isAdmin && (() => {
-        const isKo = true
         const opts = [
           { key: 'normal', label: '90 min',                          reward: '+1' },
           { key: 'aet',    label: 'Extra time',                      reward: '+2' },
@@ -250,7 +249,7 @@ export default function MatchCard({ match, prediction, onSaved, playerId }) {
                         {pk.name}
                         {hasScore && actualOutcome && pk.submitted && (
                           <span className={`pick-bonus-dot ${bonusEarned ? 'earned' : 'missed'}`}>
-                            {bonusEarned ? '+2' : '+0'}
+                            {bonusEarned ? `+${outcomeBonus(pk.outcome_pred, actualOutcome, match.pen_winner)}` : '+0'}
                           </span>
                         )}
                       </span>

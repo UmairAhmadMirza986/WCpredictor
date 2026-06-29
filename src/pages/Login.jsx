@@ -27,7 +27,7 @@ export default function Login() {
       const pinHash = await hashPin(pin)
       const { data, error: dbError } = await supabase
         .from('players')
-        .select('*')
+        .select('id, name, is_admin, gs_rank')
         .eq('name', selectedName)
         .eq('pin_hash', pinHash)
         .single()

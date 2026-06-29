@@ -28,10 +28,6 @@ export default function Leaderboard() {
         predsByPlayer[p.player_id].push(p)
       })
 
-      const koMatchIds = new Set(
-        (matches || []).filter(m => m.group_name === null).map(m => m.id)
-      )
-
       const leaderboard = (players || []).map(p => {
         let pts = 0, played = 0, exact = 0, correct = 0, outcomeBonusTotal = 0
         let submitted = 0
