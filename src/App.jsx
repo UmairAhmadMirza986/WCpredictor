@@ -5,6 +5,8 @@ import Matches from './pages/Matches'
 import Leaderboard from './pages/Leaderboard'
 import Admin from './pages/Admin'
 import Profile from './pages/Profile'
+import Rules from './pages/Rules'
+import Bracket from './pages/Bracket'
 import Navbar from './components/Navbar'
 
 function ProtectedRoute({ children }) {
@@ -31,6 +33,8 @@ export default function App() {
           <Route path="/matches" element={<ProtectedRoute><Matches /></ProtectedRoute>} />
           <Route path="/leaderboard" element={<ProtectedRoute><Leaderboard /></ProtectedRoute>} />
           <Route path="/admin" element={<AdminRoute><Admin /></AdminRoute>} />
+          <Route path="/rules" element={<ProtectedRoute><Rules /></ProtectedRoute>} />
+          <Route path="/bracket" element={<ProtectedRoute><Bracket /></ProtectedRoute>} />
           <Route path="/profile" element={<ProtectedRoute><Profile /></ProtectedRoute>} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>

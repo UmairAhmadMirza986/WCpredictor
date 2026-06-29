@@ -1,45 +1,64 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../lib/supabase'
-import { hashPin, getFlag, calculatePoints, getRoundLabel } from '../utils/scoring'
+import { hashPin, getFlag, calculatePoints, outcomeBonus, getRoundLabel } from '../utils/scoring'
 import { usePlayer } from '../context/PlayerContext'
+import { augmentWithDerivedTeams } from '../utils/bracket'
 
 export default function Admin() {
   const { player } = usePlayer()
   const [tab, setTab] = useState('scores')
   const [matches, setMatches] = useState([])
   const [players, setPlayers] = useState([])
+  const [predMap, setPredMap] = useState({})
   const [scores, setScores] = useState({})
   const [newPlayer, setNewPlayer] = useState({ name: '', pin: '' })
   const [saving, setSaving] = useState({})
   const [addingPlayer, setAddingPlayer] = useState(false)
-  const [addingMatch, setAddingMatch] = useState(false)
+  const [expandedMatch, setExpandedMatch] = useState(null)
   const [msg, setMsg] = useState('')
-  const [knockout, setKnockout] = useState({ round: 'r32', team1: '', team2: '', kickoff: '' })
 
   useEffect(() => {
     supabase.from('matches').select('*').order('kickoff_at').then(({ data }) => {
       if (!data) return
-      setMatches(data)
+      setMatches(augmentWithDerivedTeams(data))
       const s = {}
-      data.forEach(m => { s[m.id] = { s1: m.score1 ?? '', s2: m.score2 ?? '' } })
+      data.forEach(m => {
+        const uiOutcome = m.outcome === 'pen'
+          ? (m.pen_winner === 1 ? 'pen1' : 'pen2')
+          : (m.outcome || null)
+        s[m.id] = { s1: m.score1 ?? '', s2: m.score2 ?? '', outcome: uiOutcome }
+      })
       setScores(s)
     })
     supabase.from('players').select('*').order('name').then(({ data }) => {
       if (data) setPlayers(data)
     })
+    supabase.from('predictions').select('player_id, match_id').then(({ data }) => {
+      if (!data) return
+      const map = {}
+      data.forEach(p => {
+        if (!map[p.match_id]) map[p.match_id] = new Set()
+        map[p.match_id].add(p.player_id)
+      })
+      setPredMap(map)
+    })
   }, [])
 
   const saveScore = async (matchId) => {
-    const { s1, s2 } = scores[matchId]
+    const { s1, s2, outcome } = scores[matchId]
     if (s1 === '' || s2 === '') return
+    const match = matches.find(m => m.id === matchId)
+    const isKnockout = match?.stage && match.stage !== 'group'
+    if (isKnockout && !outcome) { flash('⚠ Select how the match ended'); return }
     setSaving(v => ({ ...v, [matchId]: true }))
-    await supabase.from('matches').update({ score1: +s1, score2: +s2 }).eq('id', matchId)
+    const matchOutcome = outcome === 'pen1' || outcome === 'pen2' ? 'pen' : (outcome || null)
+    const penWinner = outcome === 'pen1' ? 1 : outcome === 'pen2' ? 2 : null
+    await supabase.from('matches').update({ score1: +s1, score2: +s2, outcome: matchOutcome, pen_winner: penWinner }).eq('id', matchId)
     const { data: preds } = await supabase.from('predictions').select('*').eq('match_id', matchId)
-    if (preds) {
-      for (const pred of preds) {
-        const pts = calculatePoints(pred.pred1, pred.pred2, +s1, +s2)
-        await supabase.from('predictions').update({ points: pts }).eq('id', pred.id)
-      }
+    for (const pred of (preds || [])) {
+      const scorePts = calculatePoints(pred.pred1, pred.pred2, +s1, +s2, match?.stage, penWinner) ?? 0
+      const bonus = outcomeBonus(pred.outcome_pred, matchOutcome, penWinner)
+      await supabase.from('predictions').update({ points: scorePts + bonus }).eq('id', pred.id)
     }
     setSaving(v => ({ ...v, [matchId]: false }))
     flash('Score saved ✓')
@@ -62,38 +81,6 @@ export default function Admin() {
     setAddingPlayer(false)
   }
 
-  const addKnockoutMatch = async (e) => {
-    e.preventDefault()
-    if (!knockout.team1.trim() || !knockout.team2.trim() || !knockout.kickoff) return
-    setAddingMatch(true)
-    const kickoff_at = new Date(knockout.kickoff).toISOString()
-    const match_date = knockout.kickoff.slice(0, 10)
-    const match_time = knockout.kickoff.slice(11, 16)
-    const { error } = await supabase.from('matches').insert({
-      team1: knockout.team1.trim(),
-      team2: knockout.team2.trim(),
-      kickoff_at,
-      match_date,
-      match_time,
-      stage: knockout.round,
-      group_name: null,
-    })
-    if (error) {
-      flash('Error: ' + (error.message || 'Could not add match'))
-    } else {
-      flash(`${knockout.team1} vs ${knockout.team2} added ✓`)
-      setKnockout({ round: 'r32', team1: '', team2: '', kickoff: '' })
-      const { data } = await supabase.from('matches').select('*').order('kickoff_at')
-      if (data) {
-        setMatches(data)
-        const s = {}
-        data.forEach(m => { s[m.id] = { s1: m.score1 ?? '', s2: m.score2 ?? '' } })
-        setScores(s)
-      }
-    }
-    setAddingMatch(false)
-  }
-
   const flash = (text) => {
     setMsg(text)
     setTimeout(() => setMsg(''), 3000)
@@ -112,127 +99,121 @@ export default function Admin() {
       {msg && <div className="flash-msg">{msg}</div>}
 
       <div className="tab-bar">
-        <button className={`tab-btn${tab === 'scores' ? ' active' : ''}`} onClick={() => setTab('scores')}>
-          Scores
-        </button>
-        <button className={`tab-btn${tab === 'knockout' ? ' active' : ''}`} onClick={() => setTab('knockout')}>
-          Knockout
-        </button>
-        <button className={`tab-btn${tab === 'players' ? ' active' : ''}`} onClick={() => setTab('players')}>
-          Players
-        </button>
+        <button className={`tab-btn${tab === 'scores' ? ' active' : ''}`} onClick={() => setTab('scores')}>Scores</button>
+        <button className={`tab-btn${tab === 'players' ? ' active' : ''}`} onClick={() => setTab('players')}>Players</button>
       </div>
 
-      {tab === 'scores' && (
-        <div className="admin-matches">
-          {matches.map(m => {
-            const locked = new Date(m.kickoff_at) <= now
-            const ko = isKnockout(m)
-            const label = ko ? getRoundLabel(m.stage) : `Group ${m.group_name}`
-            return (
-              <div key={m.id} className={`admin-match${locked ? ' locked' : ''}`}>
-                <div className="admin-match-top">
-                  <span className={`admin-group-pill${ko ? ' knockout' : ''}`}>{label}</span>
-                  {locked && <span className="locked-chip">Locked</span>}
-                </div>
-                <div className="admin-match-body">
-                  <div className="admin-teams">
-                    <span>{getFlag(m.team1)} {m.team1}</span>
-                    <span className="admin-vs">vs</span>
-                    <span>{m.team2} {getFlag(m.team2)}</span>
-                  </div>
-                  <div className="admin-score-row">
-                    <input
-                      type="number" min="0" max="20"
-                      className="goal-input"
-                      value={scores[m.id]?.s1 ?? ''}
-                      placeholder="–"
-                      onChange={e => setScores(s => ({ ...s, [m.id]: { ...s[m.id], s1: e.target.value } }))}
-                    />
-                    <span className="input-dash">–</span>
-                    <input
-                      type="number" min="0" max="20"
-                      className="goal-input"
-                      value={scores[m.id]?.s2 ?? ''}
-                      placeholder="–"
-                      onChange={e => setScores(s => ({ ...s, [m.id]: { ...s[m.id], s2: e.target.value } }))}
-                    />
+      {tab === 'scores' && (() => {
+        const nonAdminPlayers = players.filter(p => !p.is_admin)
+        const needsScore = matches.filter(m => {
+          if (new Date(m.kickoff_at) > now) return false
+          if (m.score1 === null) return true
+          // Knockout match scored but outcome not set yet
+          const isKo = m.stage && m.stage !== 'group'
+          if (isKo && !m.outcome) return true
+          return false
+        })
+
+        return (
+          <div className="admin-matches">
+            {needsScore.length === 0 ? (
+              <div className="empty-state">All caught up — no matches waiting for scores</div>
+            ) : needsScore.map(m => {
+              const ko = isKnockout(m)
+              const label = ko ? getRoundLabel(m.stage) : `Group ${m.group_name}`
+              const submittedIds = predMap[m.id] || new Set()
+              const submittedCount = nonAdminPlayers.filter(p => submittedIds.has(p.id)).length
+              const isExpanded = expandedMatch === m.id
+
+              return (
+                <div key={m.id} className="admin-match">
+                  <div className="admin-match-top">
+                    <span className={`admin-group-pill${ko ? ' knockout' : ''}`}>{label}</span>
                     <button
-                      className="btn-save"
-                      onClick={() => saveScore(m.id)}
-                      disabled={saving[m.id] || scores[m.id]?.s1 === '' || scores[m.id]?.s2 === ''}
+                      className={`pred-count-btn${submittedCount === nonAdminPlayers.length ? ' all-in' : ''}`}
+                      onClick={() => setExpandedMatch(isExpanded ? null : m.id)}
                     >
-                      {saving[m.id] ? '…' : 'Save'}
+                      {submittedCount}/{nonAdminPlayers.length} predicted
                     </button>
                   </div>
-                </div>
-              </div>
-            )
-          })}
-        </div>
-      )}
 
-      {tab === 'knockout' && (
-        <div className="knockout-form-wrap">
-          <form className="knockout-form" onSubmit={addKnockoutMatch}>
-            <h3>Add Knockout Match</h3>
-            <select
-              value={knockout.round}
-              onChange={e => setKnockout(k => ({ ...k, round: e.target.value }))}
-            >
-              <option value="r32">Round of 32</option>
-              <option value="r16">Round of 16</option>
-              <option value="qf">Quarter-final</option>
-              <option value="sf">Semi-final</option>
-              <option value="3rd">3rd Place</option>
-              <option value="final">Final</option>
-            </select>
-            <div className="teams-row">
-              <input
-                type="text"
-                placeholder="Team 1"
-                value={knockout.team1}
-                onChange={e => setKnockout(k => ({ ...k, team1: e.target.value }))}
-                required
-              />
-              <span className="vs-text">vs</span>
-              <input
-                type="text"
-                placeholder="Team 2"
-                value={knockout.team2}
-                onChange={e => setKnockout(k => ({ ...k, team2: e.target.value }))}
-                required
-              />
-            </div>
-            <input
-              type="datetime-local"
-              value={knockout.kickoff}
-              onChange={e => setKnockout(k => ({ ...k, kickoff: e.target.value }))}
-              required
-            />
-            <button type="submit" className="btn-primary" disabled={addingMatch}>
-              {addingMatch ? 'Adding…' : 'Add Match'}
-            </button>
-          </form>
-        </div>
-      )}
+                  {isExpanded && (
+                    <div className="pred-status-list">
+                      {nonAdminPlayers.map(p => (
+                        <span key={p.id} className={`pred-status-chip ${submittedIds.has(p.id) ? 'done' : 'missing'}`}>
+                          {submittedIds.has(p.id) ? '✓' : '✗'} {p.name}
+                        </span>
+                      ))}
+                    </div>
+                  )}
+
+                  <div className="admin-match-body">
+                    <div className="admin-teams">
+                      <span>{getFlag(m.team1)} {m.team1}</span>
+                      <span className="admin-vs">vs</span>
+                      <span>{m.team2} {getFlag(m.team2)}</span>
+                    </div>
+                    <div className="admin-score-row">
+                      <input
+                        type="number" min="0" max="20" className="goal-input"
+                        value={scores[m.id]?.s1 ?? ''} placeholder="–"
+                        onChange={e => setScores(s => ({ ...s, [m.id]: { ...s[m.id], s1: e.target.value } }))}
+                      />
+                      <span className="input-dash">–</span>
+                      <input
+                        type="number" min="0" max="20" className="goal-input"
+                        value={scores[m.id]?.s2 ?? ''} placeholder="–"
+                        onChange={e => setScores(s => ({ ...s, [m.id]: { ...s[m.id], s2: e.target.value } }))}
+                      />
+                      <button
+                        className="btn-save"
+                        onClick={() => saveScore(m.id)}
+                        disabled={saving[m.id] || scores[m.id]?.s1 === '' || scores[m.id]?.s2 === '' || (isKnockout(m) && !scores[m.id]?.outcome)}
+                      >
+                        {saving[m.id] ? '…' : 'Save'}
+                      </button>
+                    </div>
+                    {ko && scores[m.id]?.s1 !== '' && scores[m.id]?.s2 !== '' && (
+                      <div className="outcome-picker">
+                        <span className="outcome-picker-label">How did it end?</span>
+                        <div className="outcome-btns">
+                          {[
+                            { key: 'normal', label: '90 min' },
+                            { key: 'aet',    label: 'Extra time' },
+                            { key: 'pen1',   label: `${m.team1 || 'Team 1'} (pen)` },
+                            { key: 'pen2',   label: `${m.team2 || 'Team 2'} (pen)` },
+                          ].map(opt => (
+                            <button
+                              key={opt.key}
+                              className={`outcome-btn${scores[m.id]?.outcome === opt.key ? ' selected' : ''}`}
+                              onClick={() => setScores(s => ({ ...s, [m.id]: { ...s[m.id], outcome: opt.key } }))}
+                            >
+                              {opt.label}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        )
+      })()}
 
       {tab === 'players' && (
         <div className="admin-players-tab">
           <form className="add-player-form" onSubmit={addPlayer}>
             <h3>Add Player</h3>
             <input
-              type="text"
-              placeholder="Player name"
+              type="text" placeholder="Player name"
               value={newPlayer.name}
               onChange={e => setNewPlayer(p => ({ ...p, name: e.target.value }))}
               required
             />
             <input
-              type="text"
-              inputMode="numeric"
-              placeholder="PIN (4–6 digits)"
-              maxLength={6}
+              type="text" inputMode="numeric" placeholder="PIN (4–6 digits)" maxLength={6}
               value={newPlayer.pin}
               onChange={e => setNewPlayer(p => ({ ...p, pin: e.target.value.replace(/\D/g, '') }))}
               required
@@ -243,10 +224,9 @@ export default function Admin() {
           </form>
 
           <div className="players-list">
-            {players.map(p => (
-              <div key={p.id} className="player-row">
+            {players.filter(p => !p.is_admin).map(p => (
+              <div key={p.id} className="player-adj-card">
                 <span className="player-row-name">{p.name}</span>
-                {p.is_admin && <span className="admin-chip">Admin</span>}
               </div>
             ))}
           </div>

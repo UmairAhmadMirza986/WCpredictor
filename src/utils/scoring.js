@@ -1,13 +1,33 @@
-export function calculatePoints(pred1, pred2, score1, score2) {
+const STAGE_RESULT_PTS = {
+  r32: 4, r16: 5, qf: 6, sf: 7, '3rd': 7, final: 10,
+}
+
+export function getResultPoints(stage) {
+  return STAGE_RESULT_PTS[stage] ?? 3
+}
+
+export function getMaxPoints(stage) {
+  return getResultPoints(stage) + (stage && stage !== 'group' ? 3 : 2)
+}
+
+export function calculatePoints(pred1, pred2, score1, score2, stage, penWinner = null) {
   if (score1 === null || score2 === null || score1 === undefined || score2 === undefined) {
     return null
   }
   let points = 0
   const predResult = Math.sign(pred1 - pred2)
-  const actualResult = Math.sign(score1 - score2)
-  if (predResult === actualResult) points += 3
-  if (pred1 === score1) points += 1
-  if (pred2 === score2) points += 1
+  // If match went to penalties, winner is determined by pen_winner (1 or 2), not score difference
+  const actualResult = penWinner ? (penWinner === 1 ? 1 : -1) : Math.sign(score1 - score2)
+  if (predResult === actualResult) points += getResultPoints(stage)
+
+  const isKnockout = stage && stage !== 'group'
+  if (isKnockout) {
+    if (pred1 === score1 && pred2 === score2) points += 3
+    else if (pred1 === score1 || pred2 === score2) points += 1
+  } else {
+    if (pred1 === score1) points += 1
+    if (pred2 === score2) points += 1
+  }
   return points
 }
 
@@ -51,6 +71,25 @@ export function formatKickoff(kickoffAt) {
 export function formatDate(dateStr) {
   const d = new Date(dateStr + 'T12:00:00')
   return d.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })
+}
+
+// Risk-reward bonus: 90min=1pt, AET=2pts, Pen=3pts if correct
+export function outcomeBonus(outcomePred, matchOutcome, penWinner) {
+  if (!outcomePred || !matchOutcome) return 0
+  if (matchOutcome === 'pen') {
+    if (outcomePred === 'pen1' && penWinner === 1) return 3
+    if (outcomePred === 'pen2' && penWinner === 2) return 3
+    return 0
+  }
+  if (outcomePred === matchOutcome) return matchOutcome === 'aet' ? 2 : 1
+  return 0
+}
+
+export function outcomeBonusMax(outcomePred) {
+  if (outcomePred === 'normal') return 1
+  if (outcomePred === 'aet')    return 2
+  if (outcomePred === 'pen1' || outcomePred === 'pen2') return 3
+  return null
 }
 
 export function getRoundLabel(stage) {

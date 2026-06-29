@@ -35,10 +35,10 @@ export default function Login() {
         setError('Wrong PIN. Try again.')
       } else {
         login(data)
-        navigate('/matches')
+        navigate(data.is_admin ? '/admin' : '/matches')
       }
     } catch {
-      setError('Something went wrong. Please try again.')
+      setError('Something went wrong.')
     } finally {
       setLoading(false)
     }
@@ -46,28 +46,43 @@ export default function Login() {
 
   return (
     <div className="login-page">
-      <div className="login-header">
+      {/* Decorative background "26" */}
+      <div className="login-26-bg">26</div>
+
+      <div className="login-hero">
         <div className="login-trophy">🏆</div>
-        <div className="login-ball">⚽</div>
-        <h1>FIFA WORLD CUP</h1>
-        <h2>2026</h2>
-        <p className="login-hosts">USA · Canada · Mexico</p>
-        <p className="login-subtitle">Prediction Game</p>
+
+        <div className="login-wordmark">
+          <span className="login-fifa">FIFA</span>
+          <span className="login-wc">WORLD CUP</span>
+        </div>
+
+        <div className="login-year">2026</div>
+
+        <div className="login-hosts-strip">
+          🇺🇸 USA &nbsp;·&nbsp; 🇨🇦 CANADA &nbsp;·&nbsp; 🇲🇽 MEXICO
+        </div>
+
+        <div className="login-game-badge">Prediction Game</div>
+      </div>
+
+      <div className="login-divider">
+        <span className="login-divider-line" />
+        <span className="login-divider-icon">◆</span>
+        <span className="login-divider-line" />
       </div>
 
       <div className="login-form-wrap">
         <form className="login-form" onSubmit={handleLogin}>
-          <h3 className="form-title">Sign In</h3>
-
           <div className="form-group">
-            <label>Select your name</label>
+            <label>Who are you?</label>
             <div className="select-wrap">
               <select
                 value={selectedName}
                 onChange={e => setSelectedName(e.target.value)}
                 required
               >
-                <option value="">— Choose player —</option>
+                <option value="">Select your name</option>
                 {players.map(p => (
                   <option key={p.id} value={p.name}>{p.name}</option>
                 ))}
@@ -85,7 +100,7 @@ export default function Login() {
               maxLength={6}
               value={pin}
               onChange={e => setPin(e.target.value.replace(/\D/g, ''))}
-              placeholder="Enter your PIN"
+              placeholder="••••••"
               required
               autoComplete="current-password"
             />
@@ -98,7 +113,7 @@ export default function Login() {
             disabled={loading || !selectedName || !pin}
             className="btn-login"
           >
-            {loading ? 'Checking…' : 'Let\'s Play →'}
+            {loading ? 'Checking…' : 'Enter →'}
           </button>
         </form>
       </div>
