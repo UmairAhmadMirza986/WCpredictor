@@ -68,8 +68,8 @@ export default function MatchCard({ match, prediction, onSaved, playerId }) {
     setShowPicks(true)
   }
 
-  const ptClass = points === null ? '' : points >= maxPts ? 'perfect' : points >= resultPts ? 'good' : points >= 1 ? 'partial' : 'miss'
-  const ptLabel = points === null ? '' : `${points >= maxPts ? '⭐ ' : ''}${points} pt${points !== 1 ? 's' : ''}`
+  const ptClass = scorePts === null ? '' : scorePts >= maxPts ? 'perfect' : scorePts >= resultPts ? 'good' : scorePts >= 1 ? 'partial' : 'miss'
+  const ptLabel = scorePts === null ? '' : `${scorePts >= maxPts ? '⭐ ' : ''}${scorePts} pt${scorePts !== 1 ? 's' : ''}`
 
   const pickPtClass = (pts) => {
     if (pts === null) return ''
@@ -123,9 +123,14 @@ export default function MatchCard({ match, prediction, onSaved, playerId }) {
               <span className="pred-locked-score">
                 Your pick: <strong>{prediction.pred1} – {prediction.pred2}</strong>
               </span>
-              {points !== null && (
-                <span className={`pts-chip ${ptClass}`}>{ptLabel}</span>
-              )}
+              <div className="pred-pts-row">
+                {scorePts !== null && (
+                  <span className={`pts-chip ${ptClass}`}>{ptLabel}</span>
+                )}
+                {bonusEarned > 0 && scorePts !== null && (
+                  <span className="pts-total-chip">+{bonusEarned} = {scorePts + bonusEarned} pts</span>
+                )}
+              </div>
             </div>
           ) : (
             <span className="no-pred">No prediction submitted — 0 pts</span>
@@ -247,28 +252,22 @@ export default function MatchCard({ match, prediction, onSaved, playerId }) {
                   const bonusEarned = hasScore && actualOutcome && pk.submitted && isOutcomeCorrect
                   const bonusMissed = hasScore && actualOutcome && pk.submitted && pk.outcome_pred && !isOutcomeCorrect
 
+                  const pkBonus = bonusEarned ? outcomeBonus(pk.outcome_pred, actualOutcome, match.pen_winner) : 0
+                  const pkScorePts = hasScore ? calculatePoints(pk.pred1, pk.pred2, match.score1, match.score2, match.stage, match.pen_winner) : null
+
                   return (
                     <div key={i} className="pick-row">
-                      <span className="pick-name">
-                        {pk.name}
-                        {hasScore && actualOutcome && pk.submitted && (
-                          <span className={`pick-bonus-dot ${bonusEarned ? 'earned' : 'missed'}`}>
-                            {bonusEarned ? `+${outcomeBonus(pk.outcome_pred, actualOutcome, match.pen_winner)}` : '+0'}
-                          </span>
-                        )}
-                      </span>
+                      <span className="pick-name">{pk.name}</span>
                       {pk.submitted ? (
                         <div className="pick-right">
                           <span className="pick-score">{pk.pred1} – {pk.pred2}</span>
-                          {hasScore && actualOutcome && isOutcomeCorrect && (
-                            <span className="pick-bonus-earned">
-                              +{outcomeBonus(pk.outcome_pred, actualOutcome, match.pen_winner)}
+                          {pkScorePts !== null && (
+                            <span className={`pts-chip ${pickPtClass(pkScorePts)}`}>
+                              {pkScorePts >= maxPts ? '⭐ ' : ''}{pkScorePts}pt{pkScorePts !== 1 ? 's' : ''}
                             </span>
                           )}
-                          {pk.points !== null && (
-                            <span className={`pts-chip ${pickPtClass(pk.points)}`}>
-                              {pk.points}pt{pk.points !== 1 ? 's' : ''}
-                            </span>
+                          {pkBonus > 0 && pkScorePts !== null && (
+                            <span className="pts-total-chip">+{pkBonus} = {pkScorePts + pkBonus} pts</span>
                           )}
                         </div>
                       ) : (
