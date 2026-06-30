@@ -10,9 +10,13 @@ export default function MatchCard({ match, prediction, onSaved, playerId }) {
   const isLocked = new Date(match.kickoff_at) <= now
   const hasScore = match.score1 !== null && match.score2 !== null
 
-  const points = prediction && hasScore
+  const scorePts = prediction && hasScore
     ? calculatePoints(prediction.pred1, prediction.pred2, match.score1, match.score2, match.stage, match.pen_winner)
     : null
+  const bonusEarned = prediction && hasScore && match.outcome
+    ? outcomeBonus(prediction.outcome_pred, match.outcome, match.pen_winner)
+    : 0
+  const points = scorePts !== null ? scorePts + bonusEarned : null
   const maxPts = getMaxPoints(match.stage)
   const resultPts = getResultPoints(match.stage)
 
@@ -64,12 +68,12 @@ export default function MatchCard({ match, prediction, onSaved, playerId }) {
     setShowPicks(true)
   }
 
-  const ptClass = points === null ? '' : points === maxPts ? 'perfect' : points >= resultPts ? 'good' : points >= 1 ? 'partial' : 'miss'
-  const ptLabel = points === null ? '' : `${points === maxPts ? '⭐ ' : ''}${points} pt${points !== 1 ? 's' : ''}`
+  const ptClass = points === null ? '' : points >= maxPts ? 'perfect' : points >= resultPts ? 'good' : points >= 1 ? 'partial' : 'miss'
+  const ptLabel = points === null ? '' : `${points >= maxPts ? '⭐ ' : ''}${points} pt${points !== 1 ? 's' : ''}`
 
   const pickPtClass = (pts) => {
     if (pts === null) return ''
-    return pts === maxPts ? 'perfect' : pts >= resultPts ? 'good' : pts >= 1 ? 'partial' : 'miss'
+    return pts >= maxPts ? 'perfect' : pts >= resultPts ? 'good' : pts >= 1 ? 'partial' : 'miss'
   }
 
   return (

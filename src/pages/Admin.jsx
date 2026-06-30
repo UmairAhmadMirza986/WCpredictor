@@ -87,7 +87,106 @@ export default function Admin() {
   }
 
   const now = new Date()
-  const isKnockout = (m) => m.stage !== 'group'
+  const isKo = (m) => m.stage && m.stage !== 'group'
+
+  const getLabel = (m) => isKo(m) ? getRoundLabel(m.stage) : `Group ${m.group_name}`
+
+  const needsScore = matches.filter(m => {
+    if (new Date(m.kickoff_at) > now) return false
+    if (m.score1 === null) return true
+    if (isKo(m) && !m.outcome) return true
+    return false
+  })
+  const upcoming = matches.filter(m => new Date(m.kickoff_at) > now)
+  const scored = matches.filter(m => {
+    if (m.score1 === null) return false
+    if (isKo(m) && !m.outcome) return false
+    return true
+  }).reverse()
+
+  const nonAdminPlayers = players.filter(p => !p.is_admin)
+
+  const renderScoreCard = (m) => {
+    const ko = isKo(m)
+    const label = getLabel(m)
+    const submittedIds = predMap[m.id] || new Set()
+    const submittedCount = nonAdminPlayers.filter(p => submittedIds.has(p.id)).length
+    const isExpanded = expandedMatch === m.id
+
+    return (
+      <div key={m.id} className="admin-match">
+        <div className="admin-match-top">
+          <span className={`admin-group-pill${ko ? ' knockout' : ''}`}>{label}</span>
+          <button
+            className={`pred-count-btn${submittedCount === nonAdminPlayers.length ? ' all-in' : ''}`}
+            onClick={() => setExpandedMatch(isExpanded ? null : m.id)}
+          >
+            {submittedCount}/{nonAdminPlayers.length} predicted
+          </button>
+        </div>
+
+        {isExpanded && (
+          <div className="pred-status-list">
+            {nonAdminPlayers.map(p => (
+              <span key={p.id} className={`pred-status-chip ${submittedIds.has(p.id) ? 'done' : 'missing'}`}>
+                {submittedIds.has(p.id) ? '✓' : '✗'} {p.name}
+              </span>
+            ))}
+          </div>
+        )}
+
+        <div className="admin-match-body">
+          <div className="admin-teams">
+            <span>{getFlag(m.team1)} {m.team1 || '?'}</span>
+            <span className="admin-vs">vs</span>
+            <span>{m.team2 || '?'} {getFlag(m.team2)}</span>
+          </div>
+          <div className="admin-score-row">
+            <input
+              type="number" min="0" max="20" className="goal-input"
+              value={scores[m.id]?.s1 ?? ''} placeholder="–"
+              onChange={e => setScores(s => ({ ...s, [m.id]: { ...s[m.id], s1: e.target.value } }))}
+            />
+            <span className="input-dash">–</span>
+            <input
+              type="number" min="0" max="20" className="goal-input"
+              value={scores[m.id]?.s2 ?? ''} placeholder="–"
+              onChange={e => setScores(s => ({ ...s, [m.id]: { ...s[m.id], s2: e.target.value } }))}
+            />
+            <button
+              className="btn-save"
+              onClick={() => saveScore(m.id)}
+              disabled={saving[m.id] || scores[m.id]?.s1 === '' || scores[m.id]?.s2 === '' || (ko && !scores[m.id]?.outcome)}
+            >
+              {saving[m.id] ? '…' : 'Save'}
+            </button>
+          </div>
+
+          {ko && (
+            <div className="outcome-picker">
+              <span className="outcome-picker-label">How did it end?</span>
+              <div className="outcome-btns">
+                {[
+                  { key: 'normal', label: '90 min' },
+                  { key: 'aet',    label: 'Extra time' },
+                  { key: 'pen1',   label: `${m.team1 || 'Team 1'} (pen)` },
+                  { key: 'pen2',   label: `${m.team2 || 'Team 2'} (pen)` },
+                ].map(opt => (
+                  <button
+                    key={opt.key}
+                    className={`outcome-btn${scores[m.id]?.outcome === opt.key ? ' selected' : ''}`}
+                    onClick={() => setScores(s => ({ ...s, [m.id]: { ...s[m.id], outcome: opt.key } }))}
+                  >
+                    {opt.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div className="page-shell">
@@ -103,104 +202,91 @@ export default function Admin() {
         <button className={`tab-btn${tab === 'players' ? ' active' : ''}`} onClick={() => setTab('players')}>Players</button>
       </div>
 
-      {tab === 'scores' && (() => {
-        const nonAdminPlayers = players.filter(p => !p.is_admin)
-        const needsScore = matches.filter(m => {
-          if (new Date(m.kickoff_at) > now) return false
-          if (m.score1 === null) return true
-          // Knockout match scored but outcome not set yet
-          const isKo = m.stage && m.stage !== 'group'
-          if (isKo && !m.outcome) return true
-          return false
-        })
+      {tab === 'scores' && (
+        <div className="admin-matches">
 
-        return (
-          <div className="admin-matches">
-            {needsScore.length === 0 ? (
-              <div className="empty-state">All caught up — no matches waiting for scores</div>
-            ) : needsScore.map(m => {
-              const ko = isKnockout(m)
-              const label = ko ? getRoundLabel(m.stage) : `Group ${m.group_name}`
-              const submittedIds = predMap[m.id] || new Set()
-              const submittedCount = nonAdminPlayers.filter(p => submittedIds.has(p.id)).length
-              const isExpanded = expandedMatch === m.id
+          {/* Needs Score */}
+          {needsScore.length > 0 && (
+            <div className="admin-section">
+              <div className="admin-section-hdr admin-section-hdr-urgent">
+                🔴 Needs Score ({needsScore.length})
+              </div>
+              {needsScore.map(m => renderScoreCard(m))}
+            </div>
+          )}
 
-              return (
-                <div key={m.id} className="admin-match">
-                  <div className="admin-match-top">
-                    <span className={`admin-group-pill${ko ? ' knockout' : ''}`}>{label}</span>
-                    <button
-                      className={`pred-count-btn${submittedCount === nonAdminPlayers.length ? ' all-in' : ''}`}
-                      onClick={() => setExpandedMatch(isExpanded ? null : m.id)}
-                    >
-                      {submittedCount}/{nonAdminPlayers.length} predicted
-                    </button>
-                  </div>
+          {needsScore.length === 0 && upcoming.length === 0 && (
+            <div className="empty-state">All caught up — no matches waiting for scores</div>
+          )}
 
-                  {isExpanded && (
-                    <div className="pred-status-list">
-                      {nonAdminPlayers.map(p => (
-                        <span key={p.id} className={`pred-status-chip ${submittedIds.has(p.id) ? 'done' : 'missing'}`}>
-                          {submittedIds.has(p.id) ? '✓' : '✗'} {p.name}
-                        </span>
-                      ))}
+          {/* Upcoming */}
+          {upcoming.length > 0 && (
+            <div className="admin-section">
+              <div className="admin-section-hdr">Upcoming ({upcoming.length})</div>
+              {upcoming.map(m => {
+                const ko = isKo(m)
+                const submittedIds = predMap[m.id] || new Set()
+                const submittedCount = nonAdminPlayers.filter(p => submittedIds.has(p.id)).length
+                return (
+                  <div key={m.id} className="admin-match admin-match-upcoming">
+                    <div className="admin-match-top">
+                      <span className={`admin-group-pill${ko ? ' knockout' : ''}`}>{getLabel(m)}</span>
+                      <span className="admin-kickoff-time">
+                        {new Date(m.kickoff_at).toLocaleString('en-US', {
+                          month: 'short', day: 'numeric',
+                          hour: '2-digit', minute: '2-digit',
+                          timeZone: 'Asia/Karachi'
+                        })} PKT
+                      </span>
                     </div>
-                  )}
-
-                  <div className="admin-match-body">
-                    <div className="admin-teams">
-                      <span>{getFlag(m.team1)} {m.team1}</span>
-                      <span className="admin-vs">vs</span>
-                      <span>{m.team2} {getFlag(m.team2)}</span>
-                    </div>
-                    <div className="admin-score-row">
-                      <input
-                        type="number" min="0" max="20" className="goal-input"
-                        value={scores[m.id]?.s1 ?? ''} placeholder="–"
-                        onChange={e => setScores(s => ({ ...s, [m.id]: { ...s[m.id], s1: e.target.value } }))}
-                      />
-                      <span className="input-dash">–</span>
-                      <input
-                        type="number" min="0" max="20" className="goal-input"
-                        value={scores[m.id]?.s2 ?? ''} placeholder="–"
-                        onChange={e => setScores(s => ({ ...s, [m.id]: { ...s[m.id], s2: e.target.value } }))}
-                      />
-                      <button
-                        className="btn-save"
-                        onClick={() => saveScore(m.id)}
-                        disabled={saving[m.id] || scores[m.id]?.s1 === '' || scores[m.id]?.s2 === '' || (isKnockout(m) && !scores[m.id]?.outcome)}
-                      >
-                        {saving[m.id] ? '…' : 'Save'}
-                      </button>
-                    </div>
-                    {ko && scores[m.id]?.s1 !== '' && scores[m.id]?.s2 !== '' && (
-                      <div className="outcome-picker">
-                        <span className="outcome-picker-label">How did it end?</span>
-                        <div className="outcome-btns">
-                          {[
-                            { key: 'normal', label: '90 min' },
-                            { key: 'aet',    label: 'Extra time' },
-                            { key: 'pen1',   label: `${m.team1 || 'Team 1'} (pen)` },
-                            { key: 'pen2',   label: `${m.team2 || 'Team 2'} (pen)` },
-                          ].map(opt => (
-                            <button
-                              key={opt.key}
-                              className={`outcome-btn${scores[m.id]?.outcome === opt.key ? ' selected' : ''}`}
-                              onClick={() => setScores(s => ({ ...s, [m.id]: { ...s[m.id], outcome: opt.key } }))}
-                            >
-                              {opt.label}
-                            </button>
-                          ))}
-                        </div>
+                    <div className="admin-match-body">
+                      <div className="admin-teams">
+                        <span>{getFlag(m.team1)} {m.team1 || '?'}</span>
+                        <span className="admin-vs">vs</span>
+                        <span>{m.team2 || '?'} {getFlag(m.team2)}</span>
                       </div>
-                    )}
+                      <div className="admin-pred-count-row">
+                        <span className={`pred-count-static${submittedCount === nonAdminPlayers.length ? ' all-in' : ''}`}>
+                          {submittedCount}/{nonAdminPlayers.length} predicted
+                        </span>
+                      </div>
+                    </div>
                   </div>
-                </div>
-              )
-            })}
-          </div>
-        )
-      })()}
+                )
+              })}
+            </div>
+          )}
+
+          {/* Scored */}
+          {scored.length > 0 && (
+            <div className="admin-section">
+              <div className="admin-section-hdr">Scored ({scored.length})</div>
+              {scored.map(m => {
+                const ko = isKo(m)
+                const outcomeLabel = { normal: '90 min', aet: 'AET', pen: 'Penalties' }
+                return (
+                  <div key={m.id} className="admin-match admin-match-scored">
+                    <div className="admin-match-top">
+                      <span className={`admin-group-pill${ko ? ' knockout' : ''}`}>{getLabel(m)}</span>
+                      {ko && m.outcome && (
+                        <span className="admin-outcome-badge">{outcomeLabel[m.outcome] || m.outcome}</span>
+                      )}
+                    </div>
+                    <div className="admin-match-body">
+                      <div className="admin-teams">
+                        <span>{getFlag(m.team1)} {m.team1}</span>
+                        <span className="admin-final-score">{m.score1} – {m.score2}</span>
+                        <span>{m.team2} {getFlag(m.team2)}</span>
+                      </div>
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          )}
+
+        </div>
+      )}
 
       {tab === 'players' && (
         <div className="admin-players-tab">

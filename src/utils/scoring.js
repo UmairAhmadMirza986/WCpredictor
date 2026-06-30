@@ -16,8 +16,8 @@ export function calculatePoints(pred1, pred2, score1, score2, stage, penWinner =
   }
   let points = 0
   const predResult = Math.sign(pred1 - pred2)
-  // If match went to penalties, winner is determined by pen_winner (1 or 2), not score difference
-  const actualResult = penWinner ? (penWinner === 1 ? 1 : -1) : Math.sign(score1 - score2)
+  // Pen shootout doesn't change the match result — it's always a draw at FT/AET
+  const actualResult = Math.sign(score1 - score2)
   if (predResult === actualResult) points += getResultPoints(stage)
 
   const isKnockout = stage && stage !== 'group'
